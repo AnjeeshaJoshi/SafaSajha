@@ -22,13 +22,15 @@ router.put('/', auth, async (req, res) => {
     return res.status(400).json({ message: 'Current and new passwords are required' });
   }
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.userId);
+    console.log(req.user);
     if (!user) return res.status(404).json({ message: 'User not found' });
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Incorrect current password' });
 
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    // const salt = await bcrypt.genSalt(10);
+    // user.password = await bcrypt.hash(newPassword, salt);
+    user.password  = newPassword;
     await user.save();
 
     res.status(200).json({ message: 'Password updated successfully' });

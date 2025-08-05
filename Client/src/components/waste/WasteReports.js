@@ -6,10 +6,28 @@ import {
   FiClock,
   FiCheckCircle,
   FiAlertCircle,
-  FiFilter
+  FiFilter,
+  FiEdit2,
+  FiTrash2
 } from 'react-icons/fi';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+
+const STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'assigned', label: 'Assigned' },
+  { value: 'in-progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const WASTE_TYPES = [
+  { value: 'general', label: 'General' },
+  { value: 'recyclable', label: 'Recyclable' },
+  { value: 'hazardous', label: 'Hazardous' },
+  { value: 'organic', label: 'Organic' },
+  { value: 'electronic', label: 'Electronic' },
+];
 
 const WasteReports = () => {
   const { user } = useAuth();
@@ -25,31 +43,15 @@ const WasteReports = () => {
     fetchReports();
   }, []);
 
-  // const fetchReports = async () => {
-  //   setLoading(true);
-  //   try {
-  //     const response = await axios.get('/api/admin/dashboard');
-  //     const recentReports = response.data.recentReports || [];
-  //     setReports(recentReports);
-  //   } catch (error) {
-  //     console.error('Error fetching dashboard data:', error);
-  //     toast.error('Failed to load waste reports');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
   const fetchReports = async () => {
     setLoading(true);
     try {
       let response;
 
       if (user?.role === 'admin') {
-        // Fetch from admin dashboard or reports
-        response = await axios.get('/api/admin/dashboard'); // or /api/admin/dashboard if you use that
+        response = await axios.get('/api/admin/dashboard');
         setReports(response.data.recentReports || []);
       } else {
-        // Fetch user's own reports
         response = await axios.get('/api/waste/reports');
         setReports(response.data.reports || []);
       }
@@ -61,6 +63,58 @@ const WasteReports = () => {
     }
   };
 
+  const handleStatusChange = async (reportId, newStatus) => {
+    if (!reportId || !newStatus) return;
+
+    try {
+      const res = await axios.put(`/api/waste/reports/${reportId}/status`, {
+        status: newStatus
+      });
+
+      if (res.status === 200) {
+        toast.success('Status updated successfully');
+        setReports(prev =>
+          prev.map(r => r._id === reportId ? { ...r, status: newStatus } : r)
+        );
+      } else {
+        toast.error('Unexpected response from server');
+      }
+    } catch (error) {
+      console.error('Status update failed:', error);
+      toast.error('Failed to update status');
+    }
+  };
+
+  const handleDelete = async (reportId) => {
+    if (!window.confirm('Are you sure you want to delete this report?')) return;
+
+    try {
+      const response = await axios.delete(`/api/waste/reports/${reportId}`);
+
+      // Check for both possible success responses from your backend
+      if (response.data.msg === 'Report cancelled' || response.data.msg === 'Report deleted successfully') {
+        toast.success(response.data.msg);
+        setReports(prev => prev.filter(r => r._id !== reportId));
+      } else {
+        throw new Error(response.data.msg || 'Failed to delete report');
+      }
+    } catch (err) {
+      console.error('Error deleting report:', err);
+
+      // Show specific error message from backend if available
+      const errorMessage = err.response?.data?.msg ||
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to delete report';
+
+      // Check if this is the "can only cancel pending reports" error
+      if (errorMessage.includes('Can only cancel pending reports')) {
+        toast.error('Only pending reports can be deleted');
+      } else {
+        toast.error(errorMessage);
+      }
+    }
+  };
 
   const filteredReports = reports.filter((report) => {
     const matchesStatus = filters.status ? report.status === filters.status : true;
@@ -130,11 +184,11 @@ const WasteReports = () => {
               onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
             >
               <option value="">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="assigned">Assigned</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              {STATUS_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -146,11 +200,11 @@ const WasteReports = () => {
               onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}
             >
               <option value="">All Types</option>
-              <option value="general">General</option>
-              <option value="recyclable">Recyclable</option>
-              <option value="hazardous">Hazardous</option>
-              <option value="organic">Organic</option>
-              <option value="electronic">Electronic</option>
+              {WASTE_TYPES.map(type => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -185,7 +239,6 @@ const WasteReports = () => {
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-green-500 border-t-transparent" />
         </div>
       ) : (
-
         <div className="bg-white border rounded-lg shadow-sm">
           <div className="p-6 border-b">
             <h3 className="text-lg font-semibold text-gray-900">
@@ -230,13 +283,48 @@ const WasteReports = () => {
                         </p>
                       </div>
                     </div>
+
                     <div className="text-right">
-                      <span className={getStatusStyles(report.status)}>{report.status}</span>
+                      {user?.role === 'admin' ? (
+                        <select
+                          className={`${getStatusStyles(report.status)} capitalize`}
+                          value={report.status}
+                          onChange={(e) => handleStatusChange(report._id, e.target.value)}
+                        >
+                          {STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={getStatusStyles(report.status)}>{report.status}</span>
+                      )}
                       <p className="text-xs text-gray-500 mt-1">
                         {report.quantity} • {report.urgency}
                       </p>
                     </div>
                   </div>
+
+                  {/* Stylish Edit/Delete buttons */}
+                  {user?.role === 'user' && report.status === 'pending' && (
+                    <div className="flex justify-end mt-4 space-x-3">
+                      <Link
+                        to={`/edit-report/${report._id}`}
+                        className="inline-flex items-center px-3 py-1.5 border border-blue-500 rounded-md shadow-sm text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                      >
+                        <FiEdit2 className="w-4 h-4 mr-1.5" />
+                        Edit
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(report._id)}
+                        className="inline-flex items-center px-3 py-1.5 border border-red-500 rounded-md shadow-sm text-sm font-medium text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                      >
+                        <FiTrash2 className="w-4 h-4 mr-1.5" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}

@@ -84,6 +84,7 @@ userSchema.pre('save', async function (next) {
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+    console.log(this.password, "save password");
     next();
   } catch (err) {
     next(err);
@@ -91,8 +92,9 @@ userSchema.pre('save', async function (next) {
 });
 
 // Method to compare password
-userSchema.methods.comparePassword = function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  console.log(candidatePassword, this.password, "compared password");
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Method to return public profile

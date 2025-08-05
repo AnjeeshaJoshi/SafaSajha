@@ -15,6 +15,7 @@ import AdminUsers from './components/admin/AdminUsers';
 import AdminAnalytics from './components/admin/AdminAnalytics';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import ChangePassword from './components/password/change-password';
+import UserFeedback from './components/Feedback/UserFeedback';
 
 function App() {
   const { user, loading } = useAuth();
@@ -53,7 +54,8 @@ function App() {
                   <Route path="/admin/reports" element={<WasteReports />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/notifications" element={<Notifications />} />
-                  <Route path="/change-password" element= {<ChangePassword/>}/>
+                  <Route path="/change-password" element={<ChangePassword />} />
+                  {/* <Route path="/feedback" element={ <PrivateRoute> <UserFeedback /> </PrivateRoute> } /> */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </>
               ) : (
@@ -63,7 +65,7 @@ function App() {
                   <Route path="/reports" element={<WasteReports />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/notifications" element={<Notifications />} />
-                  <Route path="/change-password" element= {<ChangePassword/>}/>
+                  <Route path="/change-password" element={<ChangePassword />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </>
               )}

@@ -19,7 +19,7 @@ const setupDatabase = async () => {
       // Create admin user
       const adminUser = new User({
         name: 'Admin User',
-        email: 'admin@garbage-management.com',
+        email: 'admin@gmail.com',
         password: 'admin123',
         phone: '1234567890',
         role: 'admin',
@@ -33,13 +33,11 @@ const setupDatabase = async () => {
 
       await adminUser.save();
       console.log('✅ Admin user created successfully');
-      console.log('📧 Email: admin@garbage-management.com');
+      console.log('📧 Email: admin@gmail.com');
       console.log('🔑 Password: admin123');
     } else {
       console.log('ℹ️  Admin user already exists');
     }
-
-    // Create some sample users
     
 
     for (const userData of sampleUsers) {
