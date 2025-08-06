@@ -7,8 +7,8 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiFilter,
-  FiEdit2,
-  FiTrash2
+  FiTrash2,
+  FiX,
 } from 'react-icons/fi';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -29,6 +29,36 @@ const WASTE_TYPES = [
   { value: 'electronic', label: 'Electronic' },
 ];
 
+const DeleteConfirmationCard = ({ reportId, onConfirm, onCancel }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Confirm Deletion</h3>
+          <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-gray-600 mb-6">Are you sure you want to delete this report? This action cannot be undone.</p>
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(reportId)}
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const WasteReports = () => {
   const { user } = useAuth();
   const [reports, setReports] = useState([]);
@@ -38,6 +68,8 @@ const WasteReports = () => {
     type: '',
     search: '',
   });
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState(null);
 
   useEffect(() => {
     fetchReports();
@@ -85,13 +117,22 @@ const WasteReports = () => {
     }
   };
 
-  const handleDelete = async (reportId) => {
-    if (!window.confirm('Are you sure you want to delete this report?')) return;
+  const handleDeleteClick = (reportId) => {
+    setReportToDelete(reportId);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirmation(false);
+    setReportToDelete(null);
+  };
+
+  const handleDeleteConfirm = async (reportId) => {
+    setShowDeleteConfirmation(false);
 
     try {
       const response = await axios.delete(`/api/waste/reports/${reportId}`);
 
-      // Check for both possible success responses from your backend
       if (response.data.msg === 'Report cancelled' || response.data.msg === 'Report deleted successfully') {
         toast.success(response.data.msg);
         setReports(prev => prev.filter(r => r._id !== reportId));
@@ -100,19 +141,18 @@ const WasteReports = () => {
       }
     } catch (err) {
       console.error('Error deleting report:', err);
-
-      // Show specific error message from backend if available
       const errorMessage = err.response?.data?.msg ||
         err.response?.data?.error ||
         err.message ||
         'Failed to delete report';
 
-      // Check if this is the "can only cancel pending reports" error
       if (errorMessage.includes('Can only cancel pending reports')) {
         toast.error('Only pending reports can be deleted');
       } else {
         toast.error(errorMessage);
       }
+    } finally {
+      setReportToDelete(null);
     }
   };
 
@@ -155,6 +195,15 @@ const WasteReports = () => {
 
   return (
     <div className="space-y-6">
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirmation && (
+        <DeleteConfirmationCard
+          reportId={reportToDelete}
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -309,15 +358,9 @@ const WasteReports = () => {
                   {/* Stylish Edit/Delete buttons */}
                   {user?.role === 'user' && report.status === 'pending' && (
                     <div className="flex justify-end mt-4 space-x-3">
-                      <Link
-                        to={`/edit-report/${report._id}`}
-                        className="inline-flex items-center px-3 py-1.5 border border-blue-500 rounded-md shadow-sm text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                      >
-                        <FiEdit2 className="w-4 h-4 mr-1.5" />
-                        Edit
-                      </Link>
+
                       <button
-                        onClick={() => handleDelete(report._id)}
+                        onClick={() => handleDeleteClick(report._id)}
                         className="inline-flex items-center px-3 py-1.5 border border-red-500 rounded-md shadow-sm text-sm font-medium text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
                       >
                         <FiTrash2 className="w-4 h-4 mr-1.5" />

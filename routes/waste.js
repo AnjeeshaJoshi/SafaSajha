@@ -110,7 +110,7 @@ router.put('/reports/:id/status', [adminAuth, ...validateStatus], async (req, re
     }
 
     report.status = status;
-    console.log(req.user,report);
+    console.log(req.user, report);
     await report.save();
 
     res.json(report);
@@ -186,97 +186,8 @@ router.delete('/reports/:id', auth, async (req, res) => {
   }
 });
 
-// Submit feedback for completed report
-router.post('/reports/:id/feedback', [
-  auth,
-  body('rating', 'Rating is required').isInt({ min: 1, max: 5 }),
-  body('comment', 'Comment is required').not().isEmpty()
-], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
-  try {
-    const report = await WasteReport.findById(req.params.id);
-    if (!report) return res.status(404).json({ msg: 'Report not found' });
-
-    // Authorization check
-    if (report.user.toString() !== req.user.id) {
-      return res.status(403).json({ msg: 'Not authorized' });
-    }
-
-    if (report.status !== 'completed') {
-      return res.status(400).json({ msg: 'Only completed reports can receive feedback' });
-    }
-
-    if (report.feedback) {
-      return res.status(400).json({ msg: 'Feedback already submitted for this report' });
-    }
-
-    report.feedback = {
-      rating: req.body.rating,
-      comment: req.body.comment,
-      submittedAt: Date.now()
-    };
-
-    await report.save();
-    res.json(report);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// User gets completed reports without feedback
-router.get('/reports/completed', auth, async (req, res) => {
-  try {
-    const reports = await WasteReport.find({
-      user: req.user.id,
-      status: 'completed',
-      feedback: { $exists: false }
-    }).sort({ completedAt: -1 });
-    
-    res.json({ reports });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
 
 // Admin Routes
-
-// Admin gets all feedback
-router.get('/admin/feedback', adminAuth, async (req, res) => {
-  try {
-    const reports = await WasteReport.find({
-      status: 'completed',
-      feedback: { $exists: true }
-    })
-      .sort({ 'feedback.submittedAt': -1 })
-      .populate('user', ['name', 'email']);
-    
-    const feedback = reports.map(report => ({
-      _id: report.feedback._id,
-      rating: report.feedback.rating,
-      comment: report.feedback.comment,
-      submittedAt: report.feedback.submittedAt,
-      report: {
-        _id: report._id,
-        type: report.type,
-        location: report.location,
-        completedAt: report.completedAt || report.updatedAt
-      },
-      user: report.user
-    }));
-    
-    res.json({ feedback });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-
-
 
 // Get all waste reports (admin only)
 router.get('/admin/reports', adminAuth, async (req, res) => {

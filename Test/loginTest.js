@@ -26,10 +26,10 @@ describe('Login Page Selenium Test', function () {
     await driver.get('http://localhost:3000/login');
 
     const emailInput = await driver.findElement(By.id('email'));
-    await emailInput.sendKeys('test@example.com');
+    await emailInput.sendKeys('anjeesha.joshi@midvalley.edu.np');
 
     const passwordInput = await driver.findElement(By.id('password'));
-    await passwordInput.sendKeys('test123');
+    await passwordInput.sendKeys('Anjeesha123');
 
     const loginButton = await driver.findElement(By.css('button[type="submit"]'));
     await loginButton.click();
