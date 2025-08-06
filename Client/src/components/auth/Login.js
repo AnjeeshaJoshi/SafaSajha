@@ -83,6 +83,7 @@ const Login = () => {
               />
               <button
                 type="button"
+                role='showpassword-button'
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 onClick={() => setShowPassword(!showPassword)}
               >
@@ -98,6 +99,7 @@ const Login = () => {
           <div>
             <button
               type="submit"
+              role='button'
               disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
