@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiBell, FiCheck, FiTrash2, FiFilter } from 'react-icons/fi';
+import { FiBell, FiCheck, FiTrash2 } from 'react-icons/fi';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 

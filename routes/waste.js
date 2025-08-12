@@ -110,7 +110,7 @@ router.put('/reports/:id/status', [adminAuth, ...validateStatus], async (req, re
     }
 
     report.status = status;
-    console.log(req.user, report);
+    // console.log(req.user, report);
     await report.save();
 
     res.json(report);

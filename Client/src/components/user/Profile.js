@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { FiUser, FiMail, FiPhone, FiMapPin, FiSettings, FiSave } from 'react-icons/fi';
+import { FiSave } from 'react-icons/fi';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 

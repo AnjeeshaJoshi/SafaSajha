@@ -8,46 +8,30 @@ const { adminAuth } = require('../middleware/auth');
 const router = express.Router();
 
 // @route   GET /api/admin/dashboard
-// @desc    Get admin dashboard statistics
+// @desc    Get admin dashboard statistics with latest 5 reports
 // @access  Private/Admin
 router.get('/dashboard', adminAuth, async (req, res) => {
   try {
-    // Get total users
     const totalUsers = await User.countDocuments({ role: 'user' });
-    
-    // Get total reports by status
+
     const pendingReports = await WasteReport.countDocuments({ status: 'pending' });
     const assignedReports = await WasteReport.countDocuments({ status: 'assigned' });
     const inProgressReports = await WasteReport.countDocuments({ status: 'in-progress' });
     const completedReports = await WasteReport.countDocuments({ status: 'completed' });
-    
-    // Get reports by type
+
     const reportsByType = await WasteReport.aggregate([
-      {
-        $group: {
-          _id: '$type',
-          count: { $sum: 1 }
-        }
-      }
+      { $group: { _id: '$type', count: { $sum: 1 } } }
     ]);
-    
-    // Get reports by urgency
+
     const reportsByUrgency = await WasteReport.aggregate([
-      {
-        $group: {
-          _id: '$urgency',
-          count: { $sum: 1 }
-        }
-      }
+      { $group: { _id: '$urgency', count: { $sum: 1 } } }
     ]);
-    
-    // Get recent reports
+
     const recentReports = await WasteReport.find()
       .sort({ createdAt: -1 })
-      .limit(5)
+      .limit(5)               // Limit to 5 reports for dashboard
       .populate('user', 'name email');
-    
-    // Get monthly statistics for the current year
+
     const currentYear = new Date().getFullYear();
     const monthlyStats = await WasteReport.aggregate([
       {
@@ -64,9 +48,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
           count: { $sum: 1 }
         }
       },
-      {
-        $sort: { _id: 1 }
-      }
+      { $sort: { _id: 1 } }
     ]);
 
     res.json({
@@ -89,13 +71,29 @@ router.get('/dashboard', adminAuth, async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/reports
+// @desc    Get all waste reports (admin only)
+// @access  Private/Admin
+router.get('/reports', adminAuth, async (req, res) => {
+  try {
+    const reports = await WasteReport.find()
+      .sort({ createdAt: -1 })
+      .populate('user', 'name email');
+
+    res.json({ reports });
+  } catch (error) {
+    console.error('Get all reports error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/admin/users
 // @desc    Get all users (admin only)
 // @access  Private/Admin
 router.get('/users', adminAuth, async (req, res) => {
   try {
     const { role, isActive, page = 1, limit = 20 } = req.query;
-    
+
     const filter = {};
     if (role) filter.role = role;
     if (isActive !== undefined) filter.isActive = isActive === 'true';
@@ -103,15 +101,15 @@ router.get('/users', adminAuth, async (req, res) => {
     const users = await User.find(filter)
       .select('-password')
       .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit));
 
     const total = await User.countDocuments(filter);
 
     res.json({
       users,
       totalPages: Math.ceil(total / limit),
-      currentPage: page,
+      currentPage: Number(page),
       total
     });
   } catch (error) {
@@ -126,20 +124,16 @@ router.get('/users', adminAuth, async (req, res) => {
 router.get('/users/:id', adminAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Get user's waste reports
     const reports = await WasteReport.find({ user: req.params.id })
       .sort({ createdAt: -1 })
       .limit(10);
 
-    res.json({
-      user,
-      reports
-    });
+    res.json({ user, reports });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -152,7 +146,7 @@ router.get('/users/:id', adminAuth, async (req, res) => {
 router.put('/users/:id', adminAuth, async (req, res) => {
   try {
     const { name, email, phone, address, role, isActive, preferences } = req.body;
-    
+
     const updateData = {};
     if (name) updateData.name = name;
     if (email) updateData.email = email;
@@ -162,11 +156,7 @@ router.put('/users/:id', adminAuth, async (req, res) => {
     if (isActive !== undefined) updateData.isActive = isActive;
     if (preferences) updateData.preferences = preferences;
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    ).select('-password');
+    const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true }).select('-password');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -184,11 +174,7 @@ router.put('/users/:id', adminAuth, async (req, res) => {
 // @access  Private/Admin
 router.delete('/users/:id', adminAuth, async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { isActive: false },
-      { new: true }
-    ).select('-password');
+    const user = await User.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true }).select('-password');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -206,22 +192,18 @@ router.delete('/users/:id', adminAuth, async (req, res) => {
 // @access  Private/Admin
 router.post('/notifications/broadcast', [
   adminAuth,
-  check('title', 'Title is required').not().isEmpty(),
-  check('message', 'Message is required').not().isEmpty(),
+  check('title', 'Title is required').notEmpty(),
+  check('message', 'Message is required').notEmpty(),
   check('type', 'Type is required').isIn(['info', 'success', 'warning', 'error', 'reminder'])
 ], async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   try {
     const { title, message, type, category = 'general' } = req.body;
 
-    // Get all active users
     const users = await User.find({ isActive: true, role: 'user' });
 
-    // Create notifications for all users
     const notifications = users.map(user => ({
       user: user._id,
       title,
@@ -232,7 +214,7 @@ router.post('/notifications/broadcast', [
 
     await Notification.insertMany(notifications);
 
-    res.json({ 
+    res.json({
       message: `Broadcast notification sent to ${users.length} users`,
       count: users.length
     });
@@ -252,30 +234,17 @@ router.get('/analytics', adminAuth, async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // Reports created in the period
-    const reportsCreated = await WasteReport.countDocuments({
-      createdAt: { $gte: startDate }
-    });
+    const reportsCreated = await WasteReport.countDocuments({ createdAt: { $gte: startDate } });
+    const reportsCompleted = await WasteReport.countDocuments({ completedDate: { $gte: startDate } });
 
-    // Reports completed in the period
-    const reportsCompleted = await WasteReport.countDocuments({
-      completedDate: { $gte: startDate }
-    });
-
-    // Average completion time
     const completionTimes = await WasteReport.aggregate([
-      {
-        $match: {
-          completedDate: { $gte: startDate },
-          createdAt: { $exists: true }
-        }
-      },
+      { $match: { completedDate: { $gte: startDate }, createdAt: { $exists: true } } },
       {
         $project: {
           completionTime: {
             $divide: [
               { $subtract: ['$completedDate', '$createdAt'] },
-              1000 * 60 * 60 * 24 // Convert to days
+              1000 * 60 * 60 * 24
             ]
           }
         }
@@ -288,32 +257,19 @@ router.get('/analytics', adminAuth, async (req, res) => {
       }
     ]);
 
-    // User registration trend
     const userRegistrations = await User.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate },
-          role: 'user'
-        }
-      },
+      { $match: { createdAt: { $gte: startDate }, role: 'user' } },
       {
         $group: {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
           count: { $sum: 1 }
         }
       },
-      {
-        $sort: { _id: 1 }
-      }
+      { $sort: { _id: 1 } }
     ]);
 
-    // Reports by status in the period
     const reportsByStatus = await WasteReport.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate }
-        }
-      },
+      { $match: { createdAt: { $gte: startDate } } },
       {
         $group: {
           _id: '$status',
@@ -326,7 +282,7 @@ router.get('/analytics', adminAuth, async (req, res) => {
       period: `${days} days`,
       reportsCreated,
       reportsCompleted,
-      completionRate: reportsCreated > 0 ? (reportsCompleted / reportsCreated * 100).toFixed(2) : 0,
+      completionRate: reportsCreated > 0 ? ((reportsCompleted / reportsCreated) * 100).toFixed(2) : 0,
       avgCompletionTime: completionTimes.length > 0 ? completionTimes[0].avgCompletionTime.toFixed(2) : 0,
       userRegistrations,
       reportsByStatus
@@ -337,4 +293,4 @@ router.get('/analytics', adminAuth, async (req, res) => {
   }
 });
 
-module.exports = router; 
+module.exports = router;

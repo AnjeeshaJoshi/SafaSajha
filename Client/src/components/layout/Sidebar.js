@@ -17,11 +17,12 @@ const Sidebar = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        if (!user) return;
+        if (!user || !token) return;
 
         const config = {
           headers: { Authorization: `Bearer ${token}` }
         };
+
 
         if (user.role === 'admin') {
           const { data } = await axios.get('/api/admin/dashboard', config);
