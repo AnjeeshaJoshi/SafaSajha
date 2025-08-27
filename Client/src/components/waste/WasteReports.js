@@ -81,8 +81,8 @@ const WasteReports = () => {
       let response;
 
       if (user?.role === 'admin') {
-        response = await axios.get('/api/admin/dashboard');
-        setReports(response.data.recentReports || []);
+        response = await axios.get('/api/admin/reports');
+        setReports(response.data.reports || []);
       } else {
         response = await axios.get('/api/waste/reports');
         setReports(response.data.reports || []);

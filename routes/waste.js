@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { auth, adminAuth } = require('../middleware/auth');
 const WasteReport = require('../models/WasteReport');
+const Notification = require('../models/Notification');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -52,6 +53,35 @@ router.post('/report', [auth, ...validateReport], async (req, res) => {
     });
 
     await report.save();
+
+    // Create notification for all admins about new report
+    try {
+      const adminUsers = await User.find({ role: 'admin', isActive: true }).select('_id');
+      const adminNotifications = adminUsers.map((admin) => ({
+        user: admin._id,
+        title: 'New Waste Report Submitted',
+        message: `${req.user.name || 'A user'} submitted a new ${report.type} waste report`,
+        type: 'info',
+        category: 'report',
+        metadata: { wasteReportId: report._id }
+      }));
+      if (adminNotifications.length > 0) {
+        await Notification.insertMany(adminNotifications);
+        if (global.io) {
+          adminUsers.forEach((admin) => {
+            global.io.to(String(admin._id)).emit('notification', {
+              title: 'New Waste Report Submitted',
+              message: `${req.user.name || 'A user'} submitted a new ${report.type} waste report`,
+              type: 'info',
+              category: 'report',
+              metadata: { wasteReportId: report._id }
+            });
+          });
+        }
+      }
+    } catch (notifyErr) {
+      console.error('Failed to notify admins about new report:', notifyErr);
+    }
 
     // Emit socket event if available
     if (global.io) {
@@ -110,8 +140,33 @@ router.put('/reports/:id/status', [adminAuth, ...validateStatus], async (req, re
     }
 
     report.status = status;
-    // console.log(req.user, report);
+    if (status === STATUS.COMPLETED) {
+      report.completedDate = new Date();
+    }
     await report.save();
+
+    // Notify user about status change
+    try {
+      await Notification.create({
+        user: report.user,
+        title: 'Waste Report Status Updated',
+        message: `Your waste report status changed to ${status}`,
+        type: 'info',
+        category: 'report',
+        metadata: { wasteReportId: report._id }
+      });
+      if (global.io) {
+        global.io.to(String(report.user)).emit('notification', {
+          title: 'Waste Report Status Updated',
+          message: `Your waste report status changed to ${status}`,
+          type: 'info',
+          category: 'report',
+          metadata: { wasteReportId: report._id }
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Failed to notify user about status change:', notifyErr);
+    }
 
     res.json(report);
   } catch (err) {
@@ -227,6 +282,29 @@ router.put('/admin/reports/:id/assign', [
     report.assignedAt = Date.now();
 
     await report.save();
+
+    // Notify user about assignment
+    try {
+      await Notification.create({
+        user: report.user,
+        title: 'Waste Report Assigned',
+        message: 'Your waste report has been assigned to a staff member',
+        type: 'success',
+        category: 'report',
+        metadata: { wasteReportId: report._id }
+      });
+      if (global.io) {
+        global.io.to(String(report.user)).emit('notification', {
+          title: 'Waste Report Assigned',
+          message: 'Your waste report has been assigned to a staff member',
+          type: 'success',
+          category: 'report',
+          metadata: { wasteReportId: report._id }
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Failed to notify user about assignment:', notifyErr);
+    }
     res.json(report);
   } catch (err) {
     handleError(res, err);

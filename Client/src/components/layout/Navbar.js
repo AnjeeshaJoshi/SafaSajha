@@ -11,6 +11,7 @@ import {
   FiX
 } from 'react-icons/fi';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -22,7 +23,29 @@ const Navbar = () => {
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
+
+    // Real-time updates via Socket.IO
+    let socket;
+    if (user?._id) {
+      socket = io('http://localhost:5003', { transports: ['websocket'] });
+      socket.on('connect', () => {
+        socket.emit('join', String(user._id));
+      });
+
+      socket.on('notification', (payload) => {
+        // Prepend the new notification to the dropdown list
+        setNotifications((prev) => [
+          { ...payload, _id: payload._id || Math.random().toString(36).slice(2), isRead: false, createdAt: new Date().toISOString() },
+          ...prev
+        ].slice(0, 5));
+        setUnreadCount((prev) => prev + 1);
+      });
+    }
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
+  }, [user?._id]);
 
   const fetchNotifications = async () => {
     try {
@@ -164,13 +187,13 @@ const Navbar = () => {
                     >
                       <FiKey className="mr-3" /> Change Password
                     </Link>
-                    <Link
+                    {/* <Link
                       to="/settings"
                       onClick={() => setShowUserMenu(false)}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       <FiSettings className="mr-3" /> Settings
-                    </Link>
+                    </Link> */}
                     <hr className="my-1" />
                     <button
                       onClick={handleLogout}

@@ -230,20 +230,41 @@ router.post('/notifications/broadcast', [
 router.get('/analytics', adminAuth, async (req, res) => {
   try {
     const { period = '30' } = req.query;
-    const days = parseInt(period);
+    const days = parseInt(period, 10);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    // Created within period
     const reportsCreated = await WasteReport.countDocuments({ createdAt: { $gte: startDate } });
-    const reportsCompleted = await WasteReport.countDocuments({ completedDate: { $gte: startDate } });
 
+    // Completed within period (ensure status completed, fallback to updatedAt)
+    const reportsCompleted = await WasteReport.countDocuments({
+      status: 'completed',
+      $or: [
+        { completedDate: { $gte: startDate } },
+        { updatedAt: { $gte: startDate } }
+      ]
+    });
+
+    // Average completion time in days for items completed within the period
     const completionTimes = await WasteReport.aggregate([
-      { $match: { completedDate: { $gte: startDate }, createdAt: { $exists: true } } },
+      {
+        $addFields: {
+          effectiveCompletedAt: { $ifNull: ['$completedDate', '$updatedAt'] }
+        }
+      },
+      {
+        $match: {
+          status: 'completed',
+          effectiveCompletedAt: { $gte: startDate },
+          createdAt: { $exists: true }
+        }
+      },
       {
         $project: {
           completionTime: {
             $divide: [
-              { $subtract: ['$completedDate', '$createdAt'] },
+              { $subtract: ['$effectiveCompletedAt', '$createdAt'] },
               1000 * 60 * 60 * 24
             ]
           }
@@ -256,6 +277,38 @@ router.get('/analytics', adminAuth, async (req, res) => {
         }
       }
     ]);
+
+    const avgCompletionTimePeriod = completionTimes.length > 0 && completionTimes[0].avgCompletionTime
+      ? Math.round(completionTimes[0].avgCompletionTime * 100) / 100
+      : 0;
+
+    // Also compute all-time aggregates for sensible fallbacks when the selected period has no activity
+    const totalReportsCreated = await WasteReport.countDocuments({});
+    const totalReportsCompleted = await WasteReport.countDocuments({ status: 'completed' });
+    const completionTimesAll = await WasteReport.aggregate([
+      {
+        $addFields: {
+          effectiveCompletedAt: { $ifNull: ['$completedDate', '$updatedAt'] }
+        }
+      },
+      {
+        $match: { status: 'completed', createdAt: { $exists: true }, effectiveCompletedAt: { $exists: true } }
+      },
+      {
+        $project: {
+          completionTime: {
+            $divide: [
+              { $subtract: ['$effectiveCompletedAt', '$createdAt'] },
+              1000 * 60 * 60 * 24
+            ]
+          }
+        }
+      },
+      { $group: { _id: null, avgCompletionTime: { $avg: '$completionTime' } } }
+    ]);
+    const avgCompletionTimeAll = completionTimesAll.length > 0 && completionTimesAll[0].avgCompletionTime
+      ? Math.round(completionTimesAll[0].avgCompletionTime * 100) / 100
+      : 0;
 
     const userRegistrations = await User.aggregate([
       { $match: { createdAt: { $gte: startDate }, role: 'user' } },
@@ -278,12 +331,21 @@ router.get('/analytics', adminAuth, async (req, res) => {
       }
     ]);
 
+    const completionRate = reportsCreated > 0
+      ? Math.round((reportsCompleted / reportsCreated) * 10000) / 100
+      : (totalReportsCreated > 0
+          ? Math.round((totalReportsCompleted / totalReportsCreated) * 10000) / 100
+          : 0);
+
+    const finalReportsCompleted = reportsCompleted > 0 ? reportsCompleted : totalReportsCompleted;
+    const finalAvgCompletionTime = avgCompletionTimePeriod > 0 ? avgCompletionTimePeriod : avgCompletionTimeAll;
+
     res.json({
       period: `${days} days`,
       reportsCreated,
-      reportsCompleted,
-      completionRate: reportsCreated > 0 ? ((reportsCompleted / reportsCreated) * 100).toFixed(2) : 0,
-      avgCompletionTime: completionTimes.length > 0 ? completionTimes[0].avgCompletionTime.toFixed(2) : 0,
+      reportsCompleted: finalReportsCompleted,
+      completionRate,
+      avgCompletionTime: finalAvgCompletionTime,
       userRegistrations,
       reportsByStatus
     });
